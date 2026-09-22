@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "月蓝琉璃工作台",
-  "version": "0.0.46",
+  "version": "0.0.45",
   "identifier": "com.lumi.workbench",
   "build": {
     "frontendDist": "../dist",
