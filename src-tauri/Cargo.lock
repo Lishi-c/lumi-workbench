@@ -2146,7 +2146,7 @@ checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
 name = "lumi-workbench"
-version = "0.0.45"
+version = "0.0.46"
 dependencies = [
  "chrono",
  "log",

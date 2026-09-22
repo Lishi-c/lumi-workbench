@@ -438,7 +438,7 @@ async fn check_for_updates(app: AppHandle) -> Result<UpdateInfo, String> {
         .build()
         .map_err(|e| e.to_string())?;
     let json: Value = client
-        .get("https://api.github.com/repos/Lishi-c/ai-workbench/releases/latest")
+        .get("https://api.github.com/repos/Lishi-c/lumi-workbench/releases/latest")
         .header("User-Agent", "lumi-workbench")
         .send()
         .await
