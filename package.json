@@ -7,7 +7,10 @@
   "scripts": {
     "dev": "echo 'Do not use this command, only use lint to check'",
     "build": "echo 'Do not use this command, only use lint to check'",
-    "lint": "tsgo -p tsconfig.check.json; npx biome lint; npx tailwindcss -i ./src/index.css -o /dev/null 2>&1 | grep -E '^(CssSyntaxError|Error):.*' || true; rm -f nul",
+    "lint": "npm run lint:types && npm run lint:code && npm run lint:css",
+    "lint:types": "tsgo -p tsconfig.check.json",
+    "lint:code": "biome lint",
+    "lint:css": "node .rules/check-css.mjs",
     "build:web": "vite build",
     "test": "node --test src/workbench/bill-import.test.ts",
     "build:icon": "node scripts/make-icon.cjs"

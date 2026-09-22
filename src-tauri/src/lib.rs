@@ -51,7 +51,28 @@ fn write_content(app: &AppHandle, kind: &str, id: &str, content: &str) -> Result
     let dir = content_dir(app)?;
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let file = dir.join(format!("{kind}-{id}.txt"));
-    fs::write(&file, content).map_err(|e| e.to_string())
+    // 先写临时文件再原子重命名：避免原地截断写入。
+    // 这样即使正文文件被备份以硬链接共享，修改也只会换上新 inode，不会改写历史备份。
+    let tmp = dir.join(format!("{kind}-{id}.txt.tmp"));
+    fs::write(&tmp, content).map_err(|e| e.to_string())?;
+    fs::rename(&tmp, &file).map_err(|e| e.to_string())
+}
+
+/// 内容文件是否可安全地硬链接共享：目标不存在、或与源大小一致，才认为未被改写。
+fn shareable(src: &Path, dst: &Path) -> bool {
+    match fs::metadata(dst) {
+        Ok(m) => m.len() == fs::metadata(src).map(|s| s.len()).unwrap_or(u64::MAX),
+        Err(_) => true,
+    }
+}
+
+/// 优先硬链接，失败（跨卷、文件系统不支持等）时回退为复制。
+/// 备份与数据同处 data/ 目录，正常情况下会走硬链接，从而多份备份只占一份磁盘。
+fn link_or_copy(src: &Path, dst: &Path) -> std::io::Result<()> {
+    if fs::hard_link(src, dst).is_ok() {
+        return Ok(());
+    }
+    fs::copy(src, dst).map(|_| ())
 }
 
 // 正文拆分：books/documents 的 content 抽到 content/*.txt，主 JSON 只留 preview
@@ -91,19 +112,28 @@ fn read_data(app: &AppHandle) -> Option<Value> {
 }
 
 // ── 备份与恢复 ──────────────────────────────────
-fn copy_dir(src: &Path, dst: &Path) -> std::io::Result<()> {
+/// 递归复制目录树。`share == true` 时对未改写的文件优先建硬链接，
+/// 使多份备份共享同一份正文数据而不重复占用磁盘。
+fn copy_tree(src: &Path, dst: &Path, share: bool) -> std::io::Result<()> {
     fs::create_dir_all(dst)?;
     for entry in fs::read_dir(src)? {
         let entry = entry?;
         let from = entry.path();
         let to = dst.join(entry.file_name());
         if entry.file_type()?.is_dir() {
-            copy_dir(&from, &to)?;
+            copy_tree(&from, &to, share)?;
+        } else if share && shareable(&from, &to) {
+            link_or_copy(&from, &to)?;
         } else {
             fs::copy(&from, &to)?;
         }
     }
     Ok(())
+}
+
+/// 全量复制（迁移、从备份恢复时使用：必须是独立副本，不能与源共享 inode）
+fn copy_dir(src: &Path, dst: &Path) -> std::io::Result<()> {
+    copy_tree(src, dst, false)
 }
 
 fn backup_data(app: &AppHandle) {
@@ -120,10 +150,11 @@ fn backup_data(app: &AppHandle) {
         .unwrap_or(0);
     let backup_dir = backup_root.join(format!("backup-{stamp}"));
     let _ = fs::create_dir_all(&backup_dir);
+    // 主 JSON 体积很小（正文已拆分到 content/），始终独立复制，避免与在用文件共享 inode
     let _ = fs::copy(&file, backup_dir.join("workbench-data.json"));
     let content = dir.join("content");
     if content.exists() {
-        let _ = copy_dir(&content, &backup_dir.join("content"));
+        let _ = copy_tree(&content, &backup_dir.join("content"), true);
     }
     // 只保留最近 10 份
     let mut dirs: Vec<_> = fs::read_dir(&backup_root)
