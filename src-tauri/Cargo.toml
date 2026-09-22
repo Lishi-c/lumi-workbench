@@ -1,6 +1,6 @@
 [package]
 name = "lumi-workbench"
-version = "0.0.44"
+version = "0.0.45"
 description = "月蓝琉璃工作台——本地优先的个人工作台"
 authors = ["Lumi"]
 license = ""
